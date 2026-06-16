@@ -12,7 +12,14 @@ use tokio::sync::mpsc;
 pub enum AppEvent {
     Log(String),
     CurrentFile(Option<String>),
+    StatsUpdate(TransferStat),
     Quit,
+}
+
+pub enum TransferStat {
+    Completed,
+    Skipped,
+    Failed,
 }
 
 #[tokio::main]
@@ -48,6 +55,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut app_logs = vec![String::from("Aplicacao x9 iniciada. Aperte Q, ESC ou Ctrl+C para sair.")];
     let mut status_line = String::from("Preparando transferencia em streaming...");
     let mut current_file: Option<String> = None;
+    let mut completed_count: u64 = 0;
+    let mut skipped_count: u64 = 0;
+    let mut failed_count: u64 = 0;
 
     let db_engine = Arc::clone(&db_manager);
     let tx_engine = tx.clone();
@@ -66,13 +76,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
     loop {
         tokio::select! {
             _ = render_interval.tick() => {
-                terminal.draw(&status_line, current_file.as_deref(), &app_logs)?;
+                terminal.draw(
+                    &status_line,
+                    current_file.as_deref(),
+                    completed_count,
+                    skipped_count,
+                    failed_count,
+                    &app_logs,
+                )?;
             }
 
             _ = tokio::signal::ctrl_c() => {
                 app_logs.push("Ctrl+C detectado! Encerrando imediatamente...".to_string());
                 status_line = String::from("Encerrando por Ctrl+C...");
-                terminal.draw(&status_line, current_file.as_deref(), &app_logs)?;
+                terminal.draw(
+                    &status_line,
+                    current_file.as_deref(),
+                    completed_count,
+                    skipped_count,
+                    failed_count,
+                    &app_logs,
+                )?;
                 tokio::time::sleep(Duration::from_millis(300)).await;
                 break;
             }
@@ -82,7 +106,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     AppEvent::Quit => {
                         app_logs.push("Parada solicitada. Restaurando terminal...".to_string());
                         status_line = String::from("Parada solicitada pelo usuario.");
-                        terminal.draw(&status_line, current_file.as_deref(), &app_logs)?;
+                        terminal.draw(
+                            &status_line,
+                            current_file.as_deref(),
+                            completed_count,
+                            skipped_count,
+                            failed_count,
+                            &app_logs,
+                        )?;
                         tokio::time::sleep(Duration::from_millis(400)).await;
                         break;
                     }
@@ -104,6 +135,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         current_file = file;
                         if current_file.is_none() && status_line == "Transferindo arquivo..." {
                             status_line = String::from("Aguardando proximo arquivo...");
+                        }
+                    }
+                    AppEvent::StatsUpdate(stat) => {
+                        match stat {
+                            TransferStat::Completed => completed_count += 1,
+                            TransferStat::Skipped => skipped_count += 1,
+                            TransferStat::Failed => failed_count += 1,
                         }
                     }
                 }

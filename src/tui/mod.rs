@@ -20,18 +20,34 @@ impl TuiTerminal {
         Ok(Self { terminal })
     }
 
-    pub fn draw(&mut self, status_line: &str, current_file: Option<&str>, logs: &[String]) -> io::Result<()> {
+    pub fn draw(
+        &mut self,
+        status_line: &str,
+        current_file: Option<&str>,
+        completed_count: u64,
+        skipped_count: u64,
+        failed_count: u64,
+        logs: &[String],
+    ) -> io::Result<()> {
         self.terminal.draw(|f| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Length(3),
+                    Constraint::Length(4),
                     Constraint::Min(5),
                     Constraint::Length(8),
                 ])
                 .split(f.area());
 
-            let status = Paragraph::new(status_line)
+            let status_text = format!(
+                "{}\nConcluidos: {} | Ignorados: {} | Erros: {}",
+                status_line,
+                completed_count,
+                skipped_count,
+                failed_count
+            );
+
+            let status = Paragraph::new(status_text)
                 .block(Block::default().title(" Status x9 ").borders(Borders::ALL));
             f.render_widget(status, chunks[0]);
 

@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 use walkdir::WalkDir;
 
 use crate::db::DbManager;
-use crate::AppEvent;
+use crate::{AppEvent, TransferStat};
 
 pub struct CopyEngine {
     db: Arc<DbManager>,
@@ -88,6 +88,7 @@ impl CopyEngine {
             if Path::new(&file_job.dest_path).exists() {
                 let _ = self.db.record_file_status(&file_job.source_path, &file_job.dest_path, file_job.file_size, "Skipped", None).await;
                 let _ = self.tx_tui.send(AppEvent::Log(format!("Ja existe no destino: {}", file_job.source_path))).await;
+                let _ = self.tx_tui.send(AppEvent::StatsUpdate(TransferStat::Skipped)).await;
                 continue;
             }
 
@@ -113,11 +114,13 @@ impl CopyEngine {
                     Ok(_) => {
                         let _ = db.update_status(job_id, "Completed", None).await;
                         let _ = tx.send(AppEvent::Log(format!("Sucesso: {}", file_job.source_path))).await;
+                        let _ = tx.send(AppEvent::StatsUpdate(TransferStat::Completed)).await;
                     }
                     Err(err) => {
                         let err_msg = err.to_string();
                         let _ = db.update_status(job_id, "Failed", Some(&err_msg)).await;
                         let _ = tx.send(AppEvent::Log(format!("Erro em {}: {}", file_job.source_path, err_msg))).await;
+                        let _ = tx.send(AppEvent::StatsUpdate(TransferStat::Failed)).await;
                     }
                 }
 
