@@ -1,5 +1,9 @@
 use std::io::{self, Stdout};
-use crossterm::{execute, terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}};
+
+use crossterm::{
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
 use ratatui::{prelude::*, widgets::*};
 
 pub struct TuiTerminal {
@@ -16,7 +20,7 @@ impl TuiTerminal {
         Ok(Self { terminal })
     }
 
-    pub fn draw(&mut self, progress: f64, logs: &[String]) -> io::Result<()> {
+    pub fn draw(&mut self, status_line: &str, current_file: Option<&str>, logs: &[String]) -> io::Result<()> {
         self.terminal.draw(|f| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -25,16 +29,14 @@ impl TuiTerminal {
                     Constraint::Min(5),
                     Constraint::Length(8),
                 ])
-                .split(f.size());
+                .split(f.area());
 
-            let gauge_chuncks = Gauge::default()
-                .block(Block::default().title(" Progresso Global x9 ").borders(Borders::ALL))
-                .gauge_style(Style::default().fg(Color::Green).bg(Color::Black))
-                .ratio(progress.clamp(0.0, 1.0));
-            f.render_widget(gauge_chuncks, chunks[0]);
+            let status = Paragraph::new(status_line)
+                .block(Block::default().title(" Status x9 ").borders(Borders::ALL));
+            f.render_widget(status, chunks[0]);
 
-            let items_progress = [ListItem::new("Nenhum arquivo sendo transferido no momento...")];
-            let list = List::new(items_progress).block(Block::default().title(" Transferências Ativas ").borders(Borders::ALL));
+            let items_progress = [ListItem::new(current_file.unwrap_or("Nenhum arquivo sendo transferido no momento..."))];
+            let list = List::new(items_progress).block(Block::default().title(" Transferencias Ativas ").borders(Borders::ALL));
             f.render_widget(list, chunks[1]);
 
             let log_items: Vec<ListItem> = logs.iter().map(|log| ListItem::new(log.as_str())).collect();
